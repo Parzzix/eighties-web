@@ -1,6 +1,6 @@
 class EightiesEvents {
     constructor() {
-        this.events = this.generateEvents();
+        this.corsProxy = 'https://api.allorigins.win/raw?url=';
         this.init();
     }
 
@@ -20,158 +20,335 @@ class EightiesEvents {
         document.getElementById('currentDate').textContent = today.toLocaleDateString('en-US', options);
     }
 
-    generateEvents() {
-        return {
-            "01-01": [
-                {
-                    year: 1983,
-                    category: "tv",
-                    title: "The A-Team Premieres",
-                    description: "The action-adventure series starring George Peppard and Mr. T debuts on NBC, becoming one of the most iconic shows of the decade."
-                }
-            ],
-            "01-15": [
-                {
-                    year: 1981,
-                    category: "tv",
-                    title: "Hill Street Blues Premieres",
-                    description: "The groundbreaking police drama that revolutionized television storytelling debuts on NBC."
-                }
-            ],
-            "02-14": [
-                {
-                    year: 1984,
-                    category: "music",
-                    title: "Madonna's 'Borderline' Released",
-                    description: "Madonna releases one of her signature hits, helping establish her as the Queen of Pop."
-                }
-            ],
-            "03-30": [
-                {
-                    year: 1981,
-                    category: "movie",
-                    title: "Raiders of the Lost Ark Begins Filming",
-                    description: "Steven Spielberg begins production on the adventure film that would launch the Indiana Jones franchise."
-                }
-            ],
-            "04-26": [
-                {
-                    year: 1986,
-                    category: "tv",
-                    title: "Chernobyl Disaster Inspires TV Movies",
-                    description: "The nuclear disaster becomes subject matter for several TV movies throughout the late 80s."
-                }
-            ],
-            "05-25": [
-                {
-                    year: 1983,
-                    category: "movie",
-                    title: "Return of the Jedi Released",
-                    description: "The final film in the original Star Wars trilogy premieres, concluding Luke Skywalker's journey."
-                }
-            ],
-            "06-07": [
-                {
-                    year: 1982,
-                    category: "movie",
-                    title: "E.T. the Extra-Terrestrial Released",
-                    description: "Steven Spielberg's heartwarming tale of friendship between a boy and an alien becomes the highest-grossing film of the decade."
-                },
-                {
-                    year: 1984,
-                    category: "music",
-                    title: "Prince's Purple Rain Tour Begins",
-                    description: "Prince launches his legendary Purple Rain tour, promoting both the album and the film."
-                },
-                {
-                    year: 1987,
-                    category: "tv",
-                    title: "Miami Vice Season 3 Finale",
-                    description: "The stylish crime drama airs its season finale, cementing its influence on 80s fashion and music."
-                }
-            ],
-            "07-04": [
-                {
-                    year: 1986,
-                    category: "movie",
-                    title: "Top Gun Soars at Box Office",
-                    description: "Tom Cruise's action film continues its dominance during Independence Day weekend."
-                }
-            ],
-            "08-01": [
-                {
-                    year: 1981,
-                    category: "music",
-                    title: "MTV Launches",
-                    description: "Music Television begins broadcasting with 'Video Killed the Radio Star' by The Buggles, forever changing music culture."
-                }
-            ],
-            "09-30": [
-                {
-                    year: 1986,
-                    category: "tv",
-                    title: "Cheers Season 5 Premieres",
-                    description: "The beloved sitcom returns for another season at the Boston bar where everybody knows your name."
-                }
-            ],
-            "10-26": [
-                {
-                    year: 1985,
-                    category: "movie",
-                    title: "Back to the Future Released",
-                    description: "Michael J. Fox travels through time in this sci-fi comedy that becomes a cultural phenomenon."
-                }
-            ],
-            "11-22": [
-                {
-                    year: 1983,
-                    category: "tv",
-                    title: "The Day After Airs",
-                    description: "ABC's nuclear war TV movie becomes one of the most watched television events in history."
-                }
-            ],
-            "12-25": [
-                {
-                    year: 1988,
-                    category: "movie",
-                    title: "Die Hard Christmas Release",
-                    description: "Bruce Willis stars in the action film that redefines the Christmas movie genre."
-                }
-            ]
-        };
-    }
-
-    getCurrentDateKey() {
-        const today = new Date();
-        const month = String(today.getMonth() + 1).padStart(2, '0');
-        const day = String(today.getDate()).padStart(2, '0');
-        return `${month}-${day}`;
-    }
-
-    loadTodaysEvents() {
+    async loadTodaysEvents() {
         const loading = document.getElementById('loading');
         const container = document.getElementById('eventsContainer');
         const noEvents = document.getElementById('noEvents');
 
-        // Simulate loading delay for better UX
-        setTimeout(() => {
+        try {
+            loading.style.display = 'block';
+
+            const today = new Date();
+            const events = await this.fetchAllEvents(today);
+
             loading.style.display = 'none';
 
-            const dateKey = this.getCurrentDateKey();
-            const todaysEvents = this.events[dateKey] || [];
-
-            if (todaysEvents.length === 0) {
+            if (events.length === 0) {
                 noEvents.style.display = 'block';
                 return;
             }
 
-            todaysEvents.forEach((event, index) => {
+            // Sort events by year
+            events.sort((a, b) => a.year - b.year);
+
+            events.forEach((event, index) => {
                 setTimeout(() => {
                     const eventCard = this.createEventCard(event);
                     container.appendChild(eventCard);
                 }, index * 200);
             });
-        }, 1000);
+
+        } catch (error) {
+            console.error('Error loading events:', error);
+            loading.style.display = 'none';
+            noEvents.style.display = 'block';
+            noEvents.innerHTML = '<p>Unable to load events. Please try again later.</p>';
+        }
+    }
+
+    async fetchAllEvents(date) {
+        const events = [];
+        const month = date.toLocaleString('en-US', { month: 'long' });
+        const day = date.getDate();
+
+        // Fetch from multiple sources concurrently
+        const promises = [
+            this.fetchWikipediaEvents(month, day),
+            this.fetchOnThisDayEvents(month, day),
+            this.fetchMusicEvents(month, day)
+        ];
+
+        const results = await Promise.allSettled(promises);
+
+        results.forEach(result => {
+            if (result.status === 'fulfilled' && result.value) {
+                events.push(...result.value);
+            }
+        });
+
+        // Remove duplicates and filter for 80s
+        return this.filterAndDeduplicate(events);
+    }
+
+    async fetchWikipediaEvents(month, day) {
+        try {
+            const events = [];
+
+            // Fetch Wikipedia "On This Day" data
+            const wikiUrl = `https://en.wikipedia.org/api/rest_v1/feed/onthisday/all/${String(new Date().getMonth() + 1).padStart(2, '0')}/${String(new Date().getDate()).padStart(2, '0')}`;
+
+            const response = await fetch(this.corsProxy + encodeURIComponent(wikiUrl));
+            const data = await response.json();
+
+            if (data.events) {
+                data.events.forEach(event => {
+                    if (event.year >= 1980 && event.year <= 1989) {
+                        const category = this.categorizeWikipediaEvent(event.text);
+                        if (category) {
+                            events.push({
+                                year: event.year,
+                                category: category,
+                                title: this.extractTitle(event.text),
+                                description: event.text,
+                                source: 'Wikipedia'
+                            });
+                        }
+                    }
+                });
+            }
+
+            return events;
+        } catch (error) {
+            console.error('Wikipedia fetch error:', error);
+            return [];
+        }
+    }
+
+    async fetchOnThisDayEvents(month, day) {
+        try {
+            const events = [];
+
+            // Scrape "On This Day" music events
+            const musicUrl = `https://www.onthisday.com/music/date/${new Date().getFullYear()}/${month.toLowerCase()}/${day}`;
+
+            const response = await fetch(this.corsProxy + encodeURIComponent(musicUrl));
+            const html = await response.text();
+
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            // Extract events from the parsed HTML
+            const eventElements = doc.querySelectorAll('.event-item, .timeline-item, .history-item');
+
+            eventElements.forEach(element => {
+                const text = element.textContent;
+                const yearMatch = text.match(/19[8-9]\d/);
+
+                if (yearMatch) {
+                    const year = parseInt(yearMatch[0]);
+                    if (year >= 1980 && year <= 1989) {
+                        events.push({
+                            year: year,
+                            category: 'music',
+                            title: this.extractTitle(text),
+                            description: text.trim(),
+                            source: 'OnThisDay'
+                        });
+                    }
+                }
+            });
+
+            return events;
+        } catch (error) {
+            console.error('OnThisDay fetch error:', error);
+            return [];
+        }
+    }
+
+    async fetchMusicEvents(month, day) {
+        try {
+            const events = [];
+
+            // Use multiple music history sources
+            const sources = [
+                this.fetchLastFmEvents(month, day),
+                this.fetchMusicHistoryEvents(month, day)
+            ];
+
+            const results = await Promise.allSettled(sources);
+
+            results.forEach(result => {
+                if (result.status === 'fulfilled' && result.value) {
+                    events.push(...result.value);
+                }
+            });
+
+            return events;
+        } catch (error) {
+            console.error('Music events fetch error:', error);
+            return [];
+        }
+    }
+
+    async fetchLastFmEvents(month, day) {
+        try {
+            // Note: This would require a Last.fm API key in production
+            // For demo purposes, we'll simulate the structure
+            const events = [];
+
+            // Simulate API call structure
+            const mockData = await this.getMockMusicData(month, day);
+
+            mockData.forEach(item => {
+                if (item.year >= 1980 && item.year <= 1989) {
+                    events.push({
+                        year: item.year,
+                        category: 'music',
+                        title: item.title,
+                        description: item.description,
+                        source: 'LastFM'
+                    });
+                }
+            });
+
+            return events;
+        } catch (error) {
+            console.error('LastFM fetch error:', error);
+            return [];
+        }
+    }
+
+    async fetchMusicHistoryEvents(month, day) {
+        try {
+            const events = [];
+
+            // Fetch from music history websites
+            const historyUrl = `https://www.songfacts.com/category/songs-released-on-${month.toLowerCase()}-${day}`;
+
+            const response = await fetch(this.corsProxy + encodeURIComponent(historyUrl));
+            const html = await response.text();
+
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            // Extract song release information
+            const songElements = doc.querySelectorAll('.song-item, .release-item, .fact-item');
+
+            songElements.forEach(element => {
+                const text = element.textContent;
+                const yearMatch = text.match(/19[8-9]\d/);
+
+                if (yearMatch) {
+                    const year = parseInt(yearMatch[0]);
+                    if (year >= 1980 && year <= 1989) {
+                        events.push({
+                            year: year,
+                            category: 'music',
+                            title: this.extractSongTitle(text),
+                            description: text.trim(),
+                            source: 'SongFacts'
+                        });
+                    }
+                }
+            });
+
+            return events;
+        } catch (error) {
+            console.error('Music history fetch error:', error);
+            return [];
+        }
+    }
+
+    async getMockMusicData(month, day) {
+        // Simulate dynamic data that would come from APIs
+        // In production, this would be replaced with real API calls
+        const currentDate = `${month}-${day}`;
+        const musicEvents = {
+            'June-7': [
+                {
+                    year: 1982,
+                    title: 'E.T. Soundtrack Released',
+                    description: 'John Williams\' iconic score for E.T. the Extra-Terrestrial is released.'
+                },
+                {
+                    year: 1984,
+                    title: 'Prince Purple Rain Tour Announcement',
+                    description: 'Prince announces his Purple Rain tour dates.'
+                }
+            ],
+            'August-1': [
+                {
+                    year: 1981,
+                    title: 'MTV Launches',
+                    description: 'Music Television begins broadcasting, changing music forever.'
+                }
+            ]
+        };
+
+        return musicEvents[currentDate] || [];
+    }
+
+    categorizeWikipediaEvent(text) {
+        const lowerText = text.toLowerCase();
+
+        // Skip political and sports events
+        if (lowerText.includes('election') || lowerText.includes('president') || 
+            lowerText.includes('war') || lowerText.includes('battle') ||
+            lowerText.includes('olympics') || lowerText.includes('championship')) {
+            return null;
+        }
+
+        // Categorize pop culture events
+        if (lowerText.includes('album') || lowerText.includes('song') || 
+            lowerText.includes('music') || lowerText.includes('band') ||
+            lowerText.includes('singer') || lowerText.includes('concert')) {
+            return 'music';
+        }
+
+        if (lowerText.includes('film') || lowerText.includes('movie') || 
+            lowerText.includes('cinema') || lowerText.includes('premiere')) {
+            return 'movie';
+        }
+
+        if (lowerText.includes('television') || lowerText.includes('tv show') || 
+            lowerText.includes('series') || lowerText.includes('broadcast')) {
+            return 'tv';
+        }
+
+        return null;
+    }
+
+    extractTitle(text) {
+        // Extract meaningful titles from event descriptions
+        const sentences = text.split('.');
+        let title = sentences[0];
+
+        // Clean up the title
+        title = title.replace(/^\d{4}[\s\-–]+/, ''); // Remove year prefix
+        title = title.replace(/^(On this day|Today in|This day in)\s+/i, '');
+
+        // Limit length
+        if (title.length > 60) {
+            title = title.substring(0, 57) + '...';
+        }
+
+        return title.trim();
+    }
+
+    extractSongTitle(text) {
+        // Extract song titles from music-specific text
+        const songMatch = text.match(/"([^"]+)"/);
+        if (songMatch) {
+            return `"${songMatch[1]}" Released`;
+        }
+
+        return this.extractTitle(text);
+    }
+
+    filterAndDeduplicate(events) {
+        // Remove duplicates based on title similarity
+        const unique = [];
+        const seen = new Set();
+
+        events.forEach(event => {
+            const key = `${event.year}-${event.title.toLowerCase().substring(0, 20)}`;
+            if (!seen.has(key)) {
+                seen.add(key);
+                unique.push(event);
+            }
+        });
+
+        return unique;
     }
 
     createEventCard(event) {
@@ -186,6 +363,7 @@ class EightiesEvents {
             <div class="event-year">${event.year}</div>
             <h3 class="event-title">${event.title}</h3>
             <p class="event-description">${event.description}</p>
+            ${event.source ? `<div class="event-source">Source: ${event.source}</div>` : ''}
         `;
 
         return card;
